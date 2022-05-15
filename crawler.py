@@ -11,6 +11,7 @@ from parsel import Selector
 from data_extractor import parse_post_text
 from proxied_request_executor import ProxiedRequestExecutor
 
+
 def get_id_from_thing(thing):
     '''retrevies post id from div'''
 
@@ -19,7 +20,8 @@ def get_id_from_thing(thing):
     expression = r'(?<=id-)(.+?)(?:(?=\s)|(?=^))'
     return re.search(expression, class_names).group(1)
 
-def get_paginated(executor : ProxiedRequestExecutor, after=None, url='https://old.reddit.com/'):
+
+def get_paginated(executor: ProxiedRequestExecutor, after=None, url='https://old.reddit.com/'):
     '''retrieves a number of posts previews from paginated old.reddit.com page'''
     items_per_page = 25
     #headers = {'User-Agent': 'Mozilla/5.0'}
@@ -27,27 +29,30 @@ def get_paginated(executor : ProxiedRequestExecutor, after=None, url='https://ol
     if after is not None:
         params['after'] = after
 
-    return  executor.get(url, params=params)
+    return executor.get(url, params=params)
 
-def get_items_batch(executor : ProxiedRequestExecutor, after=None, url='https://old.reddit.com/'):
+
+def get_items_batch(executor: ProxiedRequestExecutor, after=None, url='https://old.reddit.com/'):
     '''retrieves a batch of posts previews'''
-    response =  get_paginated(executor=executor, after=after, url=url)
+    response = get_paginated(executor=executor, after=after, url=url)
     if response is not None:
         selector = Selector(text=response)
         return selector.css('#siteTable .thing').getall()
     return []
 
-def generate_thread_args(batch_count=20000, start=0, end=0, workers_count=1):
+
+def generate_process_args(batch_count=20000, start=0, end=0, workers_count=1):
     '''bruh'''
-    proxies_page=0
+    proxies_page = 0
     for batch_start in range(start, end-1, -batch_count-1):
         batch_end = batch_start - batch_count
         batch_end = batch_end if batch_end > end else end
 
-        yield (batch_start, batch_end,proxies_page)
+        yield (batch_start, batch_end, proxies_page)
         proxies_page = (proxies_page+1) % workers_count
 
-def maybe_save(markup, save_path, logger : logging.Logger):
+
+def maybe_save(markup, save_path, logger: logging.Logger):
     '''bruh'''
     post_text = parse_post_text(markup)
     if len(post_text) >= 2000:
@@ -57,11 +62,12 @@ def maybe_save(markup, save_path, logger : logging.Logger):
             return True
     return False
 
+
 def setup_logger(
-        log_dir=os.path.join('.','logs'),
-        filename=f'{uuid.uuid4()}.log',
-        level=logging.INFO
-    ):
+    log_dir=os.path.join('.', 'logs'),
+    filename=f'{uuid.uuid4()}.log',
+    level=logging.INFO
+):
     '''sets up formatting and path for new logger'''
     log_format = '%(levelname)s %(asctime)s - %(message)s'
 
@@ -75,14 +81,17 @@ def setup_logger(
     )
     return logging.getLogger()
 
-def scrape_posts_batch(args : tuple):
+
+def scrape_posts_batch(args: tuple):
     '''bruh'''
-    dataset_root='./posts'
-    dataset_root='./posts'
+    dataset_root = './posts'
+    dataset_root = './posts'
     start, end, proxies_page = args
 
-    logger = setup_logger(level=logging.INFO, log_dir=os.path.join('.','logs','processes'))
-    executor = ProxiedRequestExecutor(logger=logger, proxies_page=proxies_page)
+    logger = setup_logger(level=logging.INFO,
+                          log_dir=os.path.join('.', 'logs', 'processes'))
+    executor = ProxiedRequestExecutor(
+        logger=logger, proxies_page=proxies_page, max_sleep_time=0)
 
     files_saved = 0
 
@@ -96,6 +105,7 @@ def scrape_posts_batch(args : tuple):
             if maybe_save(post, save_path, logger):
                 files_saved += 1
     return files_saved
+
 
 def check_already_crawled(dataset_root):
     '''bruh'''
@@ -112,6 +122,7 @@ def check_already_crawled(dataset_root):
 
     return len(batch), last_parsed_id
 
+
 def check_last_reddit_post_id():
     '''bruh'''
     executor = ProxiedRequestExecutor(proxy_count=1)
@@ -122,14 +133,15 @@ def check_last_reddit_post_id():
 
     return last_post_id if last_post_id is not None else last_id_if_none
 
+
 def scrape_reddit(dataset_root='./posts'):
     '''scraping posts from old.reddit.com subreddits'''
 
     if not os.path.exists(dataset_root):
         os.makedirs(dataset_root)
 
-    batch_count=5000
-    logger = setup_logger(filename = 'crawler.log')
+    batch_count = 5000
+    logger = setup_logger(filename='crawler.log')
 
     reddit_first_post_ever = 295
 
@@ -139,20 +151,23 @@ def scrape_reddit(dataset_root='./posts'):
 
     if last_crawled_id is None:
         last_crawled_id = check_last_reddit_post_id()
-        logger.info('Starting crawling after hardcoded last post: %s', last_crawled_id)
+        logger.info(
+            'Starting crawling after hardcoded last post: %s', last_crawled_id)
     else:
-        logger.info('Starting crawling after last saved post: %s', last_crawled_id)
+        logger.info('Starting crawling after last saved post: %s',
+                    last_crawled_id)
 
-    max_workers = min(8, (os.cpu_count() or 1))
+    max_workers = min(4, (os.cpu_count() or 1))
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
         try:
-            args_generator = generate_thread_args(
+            args_generator = generate_process_args(
                 batch_count=batch_count,
                 start=int(last_crawled_id, 36),
                 end=reddit_first_post_ever,
                 workers_count=max_workers,
             )
-            futures_buffer = [pool.submit(scrape_posts_batch, args) for args in args_generator]
+            futures_buffer = [pool.submit(scrape_posts_batch, args)
+                              for args in args_generator]
 
             for future in as_completed(futures_buffer):
                 posts_saved = future.result()
@@ -161,6 +176,7 @@ def scrape_reddit(dataset_root='./posts'):
         except KeyboardInterrupt:
             for pid in pool._processes:
                 os.kill(pid, signal.SIGKILL)
+
 
 if __name__ == '__main__':
     scrape_reddit()

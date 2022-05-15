@@ -7,6 +7,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import signal
 from bs4 import BeautifulSoup
 
+
 def get_filenames(root_dir, batch_size=1000):
     '''bruh'''
     batch = []
@@ -15,29 +16,33 @@ def get_filenames(root_dir, batch_size=1000):
             batch.append(os.path.join(root_dir, file.name))
             if len(batch) == batch_size:
                 yield batch
-                batch=[]
+                batch = []
 
     if len(batch) != 0:
         yield batch
 
-def parse_post_title(markup : str):
+
+def parse_post_title(markup: str):
     '''parses post title from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
-    title_tag = soup.select_one('#siteTable .thing .top-matter p.title a.title')
+    title_tag = soup.select_one(
+        '#siteTable .thing .top-matter p.title a.title')
 
     title = ''
     if title_tag is not None:
         title_raw = title_tag.get_text()
         if title_raw is not None:
-            title = re.sub(r'[^\w\s]','',title_raw)
+            title = re.sub(r'[^\w\s]', '', title_raw)
 
     return title
 
-def parse_post_text(markup : str):
+
+def parse_post_text(markup: str):
     '''parses and cleans up post content from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
     post_text = ''
-    post_tag = soup.select_one('#siteTable .thing .entry .expando form .usertext-body .md')
+    post_tag = soup.select_one(
+        '#siteTable .thing .entry .expando form .usertext-body .md')
     if post_tag is not None:
         img_tags = post_tag.find_all('img')
         for img in img_tags:
@@ -52,13 +57,19 @@ def parse_post_text(markup : str):
             code.decompose()
 
         post_text = post_tag.get_text()
-        post_text = re.sub(r'(?:(?:https?|ftp):\/\/|\b(?:[a-z\d]+\.))(?:(?:[^\s()<>]+|\((?:[^\s()<>]+|(?:\([^\s()<>]+\)))?\))+(?:\((?:[^\s()<>]+|(?:\(?:[^\s()<>]+\)))?\)|[^\s`!()\[\]{};:\'".,<>?«»“”‘’]))?', '', post_text)
-        post_text = re.sub(r'[^\w\s]','',post_text)
-        post_text = re.sub(r'\\n',' ',post_text)
+        url_pattern = r'''\b(
+        (?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/?)
+        (?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\)){0,}
+        (?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s\!()\[\]{};:\'\"\.\,<>?«»“”‘’]){0,})'''
+
+        post_text = re.sub(url_pattern, '', post_text)
+        post_text = re.sub(r'[^\w\s]', '', post_text)
+        post_text = re.sub(r'[\s]', ' ', post_text)
 
     return post_text.strip()
 
-def parse_post_score(markup : str):
+
+def parse_post_score(markup: str):
     '''parses voting score from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
     score_tag = soup.select_one('#siteTable .unvoted .unvoted')
@@ -72,7 +83,8 @@ def parse_post_score(markup : str):
 
     return score
 
-def parse_submission_time_utc(markup : str):
+
+def parse_submission_time_utc(markup: str):
     '''parses post submission date as utc string from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
     time_tag = soup.select_one('#siteTable  .top-matter .tagline time')
@@ -83,7 +95,8 @@ def parse_submission_time_utc(markup : str):
 
     return time
 
-def parse_comments_count(markup : str):
+
+def parse_comments_count(markup: str):
     '''parses comments cout of the post from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
     comments_tag = soup.select_one('#siteTable .thing .entry .buttons .first')
@@ -97,26 +110,31 @@ def parse_comments_count(markup : str):
 
     return comments_count
 
-def parse_awards(markup : str):
+
+def parse_awards(markup: str):
     '''parses award badges names of the post from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
-    awards_tags = soup.select('#siteTable  .top-matter .tagline .awardings-bar .awarding-link')
-    award_name_pattern = re.compile(r'([\w]+)[_][\d]+\.[a-z]+|([a-zA-Z0-9]+)\.[a-z]+')
-    awards={}
+    awards_tags = soup.select(
+        '#siteTable  .top-matter .tagline .awardings-bar .awarding-link')
+    award_name_pattern = re.compile(
+        r'([\w]+)[_][\d]+\.[a-z]+|([a-zA-Z0-9]+)\.[a-z]+')
+    awards = {}
     for award_tag in awards_tags:
         count = int(award_tag.get('data-count'))
-        image_tag = award_tag.select_one('.awarding-icon-container .awarding-icon')
+        image_tag = award_tag.select_one(
+            '.awarding-icon-container .awarding-icon')
         award_name = ''
         if image_tag is not None:
             image_link = image_tag.get('src').split('/')[-1]
-            #print(award_name_pattern.findall(image_link)[0])
+            # print(award_name_pattern.findall(image_link)[0])
             groups = award_name_pattern.findall(image_link)[0]
             for group in groups:
-                if len(group)>0:
-                    award_name=group
+                if len(group) > 0:
+                    award_name = group
                     break
         awards[award_name] = count
     return awards
+
 
 def extract_post_data(post_path):
     '''extracts data of main post content'''
@@ -150,16 +168,19 @@ def extract_from_batch(posts_batch):
         parsed_post = extract_post_data(path)
 
         with open(save_path, 'w', encoding='UTF-8') as cleaned_post_file:
-            json.dump(parsed_post, cleaned_post_file, ensure_ascii=False, indent=4)
+            json.dump(parsed_post, cleaned_post_file,
+                      ensure_ascii=False, indent=4)
+
 
 if __name__ == '__main__':
     posts_root = os.path.join('.', 'posts')
 
-    max_workers = min(8, (os.cpu_count() or 1))
+    max_workers = min(4, (os.cpu_count() or 1))
     with ProcessPoolExecutor(max_workers=max_workers) as pool:
         try:
             args_generator = get_filenames(posts_root)
-            futures_buffer = [pool.submit(extract_from_batch, args) for args in args_generator]
+            futures_buffer = [pool.submit(extract_from_batch, args)
+                              for args in args_generator]
             for future in as_completed(futures_buffer):
                 print('process finished')
         except KeyboardInterrupt:
