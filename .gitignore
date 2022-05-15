@@ -1,7 +1,10 @@
+#crawler specific
 posts/
 cleaned_posts/
 logs/
+proxy.cache
 
+#other
 .idea/
 
 # Created by https://www.gitignore.io/api/macos,linux,django,python,pycharm

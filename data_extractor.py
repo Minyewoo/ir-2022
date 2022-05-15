@@ -3,9 +3,8 @@
 import os
 import re
 import json
-from concurrent.futures import ProcessPoolExecutor, as_completed
-import signal
 from bs4 import BeautifulSoup
+from tqdm import tqdm
 
 
 def get_filenames(root_dir, batch_size=1000):
@@ -174,15 +173,11 @@ def extract_from_batch(posts_batch):
 
 if __name__ == '__main__':
     posts_root = os.path.join('.', 'posts')
-
-    max_workers = min(4, (os.cpu_count() or 1))
-    with ProcessPoolExecutor(max_workers=max_workers) as pool:
-        try:
-            args_generator = get_filenames(posts_root)
-            futures_buffer = [pool.submit(extract_from_batch, args)
-                              for args in args_generator]
-            for future in as_completed(futures_buffer):
-                print('process finished')
-        except KeyboardInterrupt:
-            for pid in pool._processes:
-                os.kill(pid, signal.SIGKILL)
+    batch_size = 10
+    batches = get_filenames(posts_root, batch_size=batch_size)
+    file_count = len([name for name in os.listdir(posts_root)
+                      if os.path.isfile(os.path.join(posts_root, name))])
+    with tqdm(total=file_count) as bar:
+        for batch in batches:
+            extract_from_batch(batch)
+            bar.update(batch_size)

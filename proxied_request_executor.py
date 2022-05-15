@@ -1,73 +1,13 @@
 '''helpers to execute requests through proxy'''
 
-from logging import Logger
 import logging
 import random
 from time import sleep
+from wsgiref import headers
 import requests
 from parsel import Selector
 from proxy_address import ProxyAddress
-
-
-def parse_proxies_from_table(text):
-    '''parses proxies from table tag'''
-    selector = Selector(text=text)
-    search_path = 'div.services_proxylist.services > div > div.table_block > table > tbody > tr'
-    rows = selector.css(search_path).getall()
-    return parse_proxies_from_rows(rows)
-
-
-def isnt_space_string(x):
-    '''reports whether a string is whitespace'''
-    return x != ' '
-
-
-def parse_proxies_from_rows(rows):
-    '''parses proxy from td tag'''
-
-    proxies = []
-    for row in rows:
-        selector = Selector(text=row)
-        fields = list(filter(isnt_space_string,
-                      selector.css('td ::text').getall()))
-        protocol_index = 4 if len(fields) <= 7 else 5
-        proxies.append(
-            ProxyAddress(ip_address=fields[0],
-                         port=int(fields[1]),
-                         protocol=fields[protocol_index].lower(),
-                         )
-        )
-
-    return proxies
-
-
-def scrape_hydemyname_proxies(
-    max_ping=500,
-    protocol_type='h',
-    start=0,
-    count=100,
-    headers: dict = None,
-):
-    '''retrieves proxy list from hidemy.name website'''
-    url = 'https://hidemy.name/ru/proxy-list/'
-    params = {
-        'maxtime': max_ping,
-        'type': protocol_type,
-    }
-
-    if start != 0:
-        params['start'] = start
-
-    sleep(random.uniform(0.5, 1.0))
-    data = requests.get(url=url, params=params, headers=headers).text
-    proxies = parse_proxies_from_table(data)
-
-    proxy_count = len(proxies)
-    actual_count = start+proxy_count
-    if proxy_count != 0 and actual_count < count:
-        return proxies + scrape_hydemyname_proxies(start=start+actual_count)
-
-    return proxies
+from proxy_repository import ProxyRepository
 
 
 class ProxiedRequestExecutor:
@@ -80,22 +20,21 @@ class ProxiedRequestExecutor:
     def __init__(
         self,
         user_agent=dummy_user_agent,
-        logger: Logger = logging.getLogger(),
+        logger: logging.Logger = logging.getLogger(),
         max_sleep_time=0.2,
         min_sleep_time=0.0,
-        proxies_page=0,
         proxy_count=100,
         retry_count=5
     ):
-        self.proxies_page = proxies_page
+        self.headers = {'User-Agent': user_agent}
+        self.proxy_repository = ProxyRepository(headers=self.headers)
         self.proxy_count = proxy_count
         self.retry_count = retry_count
-        self.available_proxies = scrape_hydemyname_proxies(
-            headers={'User-Agent': user_agent},
-            start=proxies_page*proxy_count,
-            count=proxy_count,
+        self.available_proxies = random.sample(
+            self.proxy_repository.proxies,
+            self.proxy_count
         )
-        self.headers = {'User-Agent': user_agent}
+
         self.logger = logger
         self.logger.info('number of proxies found: %d',
                          len(self.available_proxies))
@@ -131,9 +70,9 @@ class ProxiedRequestExecutor:
                     'status: %s; banned: %s; url: %s', status, banned, url)
 
             if len(self.available_proxies) == 0:
-                self.available_proxies = scrape_hydemyname_proxies(
-                    headers=self.headers,
-                    start=self.proxies_page*self.proxy_count
+                self.available_proxies = random.sample(
+                    self.proxy_repository.proxies,
+                    self.proxy_count
                 )
 
         return None
