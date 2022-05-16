@@ -41,7 +41,7 @@ def get_items_batch(executor: ProxiedRequestExecutor, after=None, url='https://o
     return []
 
 
-def generate_process_args(batch_count=20000, start=0, end=0, workers_count=1):
+def generate_process_args(batch_count=20000, start=0, end=0):
     '''bruh'''
     for batch_start in range(start, end-1, -batch_count-1):
         batch_end = batch_start - batch_count
@@ -128,7 +128,11 @@ def check_last_reddit_post_id(last_if_not_found):
     executor = ProxiedRequestExecutor(proxy_count=1)
     batch = get_items_batch(executor, url='https://old.reddit.com/new')
 
-    last_post_id = get_id_from_thing(batch[0]).split('_')[-1]
+    last_post_dirty_id = get_id_from_thing(batch[0]).split('_')
+    last_post_id = None
+    if len(last_post_dirty_id) == 2:
+        last_post_id = last_post_dirty_id[-1]
+
     last_id_if_none = np.base_repr(number=last_if_not_found, base=36).lower()
 
     return last_post_id if last_post_id is not None else last_id_if_none
@@ -167,14 +171,13 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
                     last_crawled_id)
 
     if is_available(url='https://old.reddit.com'):
-        max_workers = min(4, (os.cpu_count() or 1))
+        max_workers = 12  # min(8, (os.cpu_count() or 1))
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             try:
                 args_generator = generate_process_args(
                     batch_count=batch_count,
                     start=int(last_crawled_id, 36),
                     end=reddit_first_post_ever,
-                    workers_count=max_workers,
                 )
                 futures_buffer = [pool.submit(scrape_posts_batch, args)
                                   for args in args_generator]
