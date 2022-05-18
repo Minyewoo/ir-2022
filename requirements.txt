@@ -2,3 +2,4 @@ beautifulsoup4==4.11.1
 parsel==1.6.0
 numpy==1.22.3
 requests==2.27.1
+tqdm==4.64.0
