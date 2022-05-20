@@ -86,8 +86,10 @@ def scrape_posts_batch(args: tuple):
     dataset_root = './posts'
     start, end = args
 
-    logger = setup_logger(level=logging.INFO,
-                          log_dir=os.path.join('.', 'logs', 'processes'))
+    logger = setup_logger(
+        level=logging.INFO,
+        log_dir=os.path.join('.', 'logs', 'processes'),
+    )
     executor = ProxiedRequestExecutor(
         logger=logger,
         max_sleep_time=0,
@@ -125,7 +127,7 @@ def check_already_crawled(dataset_root):
 
 def check_last_reddit_post_id(last_if_not_found):
     '''bruh'''
-    executor = ProxiedRequestExecutor(proxy_count=1)
+    executor = ProxiedRequestExecutor()
     batch = get_items_batch(executor, url='https://old.reddit.com/new')
 
     last_post_dirty_id = get_id_from_thing(batch[0]).split('_')
@@ -165,13 +167,17 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
             last_if_not_found=last_post_number
         )
         logger.info(
-            'Starting crawling after hardcoded last post: %s', last_crawled_id)
+            'Starting crawling after hardcoded last post: %s',
+            last_crawled_id,
+        )
     else:
-        logger.info('Starting crawling after last saved post: %s',
-                    last_crawled_id)
+        logger.info(
+            'Starting crawling after last saved post: %s',
+            last_crawled_id,
+        )
 
     if is_available(url='https://old.reddit.com'):
-        max_workers = 12  # min(8, (os.cpu_count() or 1))
+        max_workers = min(8, (os.cpu_count() or 1))
         with ProcessPoolExecutor(max_workers=max_workers) as pool:
             try:
                 args_generator = generate_process_args(
@@ -185,7 +191,9 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
                 for future in as_completed(futures_buffer):
                     posts_saved = future.result()
                     logger.info(
-                        '%d posts total saved from process', posts_saved)
+                        '%d posts total saved from process',
+                        posts_saved,
+                    )
 
             except KeyboardInterrupt:
                 for pid in pool._processes:

@@ -3,10 +3,7 @@
 import logging
 import random
 from time import sleep
-from wsgiref import headers
 import requests
-from parsel import Selector
-from proxy_address import ProxyAddress
 from proxy_repository import ProxyRepository
 
 
@@ -23,21 +20,23 @@ class ProxiedRequestExecutor:
         logger: logging.Logger = logging.getLogger(),
         max_sleep_time=0.2,
         min_sleep_time=0.0,
-        proxy_count=100,
         retry_count=5
     ):
         self.headers = {'User-Agent': user_agent}
-        self.proxy_repository = ProxyRepository(headers=self.headers)
-        self.proxy_count = proxy_count
-        self.retry_count = retry_count
-        self.available_proxies = random.sample(
-            self.proxy_repository.proxies,
-            self.proxy_count
+
+        self.proxy_repository = ProxyRepository(
+            headers=self.headers,
+            logger=logger,
         )
 
+        self.retry_count = retry_count
+
+        self.available_proxies = self._pick_random_proxies()
+
         self.logger = logger
-        self.logger.info('number of proxies found: %d',
-                         len(self.available_proxies))
+        self.logger.info('number of proxies picked: %d',
+                         len(self.available_proxies),
+                         )
 
         self.max_sleep_time = max_sleep_time
         self.min_sleep_time = min_sleep_time
@@ -70,9 +69,12 @@ class ProxiedRequestExecutor:
                     'status: %s; banned: %s; url: %s', status, banned, url)
 
             if len(self.available_proxies) == 0:
-                self.available_proxies = random.sample(
-                    self.proxy_repository.proxies,
-                    self.proxy_count
-                )
+                self.available_proxies = self._pick_random_proxies()
 
         return None
+
+    def _pick_random_proxies(self):
+        return random.sample(
+            self.proxy_repository.proxies,
+            int(len(self.proxy_repository.proxies) * 0.1),
+        )
