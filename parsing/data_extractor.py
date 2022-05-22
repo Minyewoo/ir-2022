@@ -24,7 +24,12 @@ def parse_post_title(markup: str):
 def parse_post_text(markup: str):
     '''parses and cleans up post content from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
+    url_pattern = r'''\b(
+        (?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/?)
+        (?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\)){0,}
+        (?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s\!()\[\]{};:\'\"\.\,<>?«»“”‘’]){0,})'''
     post_text = ''
+
     post_tag = soup.select_one(
         '#siteTable .thing .entry .expando form .usertext-body .md')
     if post_tag is not None:
@@ -40,13 +45,18 @@ def parse_post_text(markup: str):
         for code in code_tags:
             code.decompose()
 
-        post_text = post_tag.get_text()
-        url_pattern = r'''\b(
-        (?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/?)
-        (?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\)){0,}
-        (?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s\!()\[\]{};:\'\"\.\,<>?«»“”‘’]){0,})'''
+        # removing <a> tags with links
+        link_tags = post_tag.find_all('a')
+        for link in link_tags:
+            link_text = link.get_text()
+            if re.match(url_pattern, link_text):
+                link.decompose()
 
+        post_text = post_tag.get_text()
+
+        # revoving links in text
         post_text = re.sub(url_pattern, '', post_text)
+
         post_text = re.sub(r'[^\w\s]', '', post_text)
         post_text = re.sub(r'[\s]', ' ', post_text)
 

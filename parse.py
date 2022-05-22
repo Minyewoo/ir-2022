@@ -31,11 +31,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     BATCH_SIZE = 10
-    batches = get_filenames_batched(args.save_path, batch_size=BATCH_SIZE)
+    batches = get_filenames_batched(args.input_path, batch_size=BATCH_SIZE)
 
     file_count = len([
-        name for name in os.listdir(args.save_path)
-        if os.path.isfile(os.path.join(args.save_path, name))
+        name for name in os.listdir(args.input_path)
+        if os.path.isfile(os.path.join(args.input_path, name))
     ])
 
     with tqdm(total=file_count, desc='Parsing posts info') as bar:
