@@ -8,8 +8,8 @@ import uuid
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from parsel import Selector
-from data_extractor import parse_post_text
-from proxied_request_executor import ProxiedRequestExecutor
+from parsing.data_extractor import parse_post_text
+from util.proxied_request_executor import ProxiedRequestExecutor
 
 
 def get_id_from_thing(thing):
@@ -41,17 +41,23 @@ def get_items_batch(executor: ProxiedRequestExecutor, after=None, url='https://o
     return []
 
 
-def generate_process_args(batch_count=20000, start=0, end=0):
-    '''bruh'''
+def generate_process_args(
+    batch_count=20000,
+    start=0,
+    end=0,
+    is_logger_in_debug=False,
+    dataset_root=os.path.join('.', 'posts')
+):
+    '''generate starting and ending points, provides debug flag'''
     for batch_start in range(start, end-1, -batch_count-1):
         batch_end = batch_start - batch_count
         batch_end = batch_end if batch_end > end else end
 
-        yield (batch_start, batch_end)
+        yield (batch_start, batch_end, is_logger_in_debug, dataset_root)
 
 
 def maybe_save(markup, save_path, logger: logging.Logger):
-    '''bruh'''
+    '''saves html markup if content length is long enough'''
     post_text = parse_post_text(markup)
     if len(post_text) >= 2000:
         with open(save_path, 'w', encoding='UTF-8') as file:
@@ -80,19 +86,17 @@ def setup_logger(
     return logging.getLogger()
 
 
-def scrape_posts_batch(args: tuple):
-    '''bruh'''
-    dataset_root = './posts'
-    dataset_root = './posts'
-    start, end = args
+def crawl_posts_batch(args: tuple):
+    '''crawls and saves a batch of posts'''
+
+    start, end, is_logger_in_debug, dataset_root = args
 
     logger = setup_logger(
-        level=logging.INFO,
+        level=logging.DEBUG if is_logger_in_debug else logging.INFO,
         log_dir=os.path.join('.', 'logs', 'processes'),
     )
     executor = ProxiedRequestExecutor(
         logger=logger,
-        max_sleep_time=0,
     )
 
     files_saved = 0
@@ -110,23 +114,23 @@ def scrape_posts_batch(args: tuple):
 
 
 def check_already_crawled(dataset_root):
-    '''bruh'''
-    batch = []
+    '''checks crawled posts count and returns id of the last'''
+    post_ids = []
     for file in os.scandir(dataset_root):
         if file.name.endswith('.html'):
-            batch.append(file.name.split('.')[0])
+            post_ids.append(file.name.split('.')[0])
 
     last_parsed_id = None
 
-    if len(batch) != 0:
-        batch.sort()
-        last_parsed_id = batch[0]
+    if len(post_ids) != 0:
+        post_ids.sort()
+        last_parsed_id = post_ids[0]
 
-    return len(batch), last_parsed_id
+    return len(post_ids), last_parsed_id
 
 
-def check_last_reddit_post_id(last_if_not_found):
-    '''bruh'''
+def specify_last_reddit_post_id(last_if_not_found):
+    '''finds id of recent post on reddit or returns specified id if not found'''
     executor = ProxiedRequestExecutor()
     batch = get_items_batch(executor, url='https://old.reddit.com/new')
 
@@ -147,14 +151,24 @@ def is_available(url):
     return page is not None
 
 
-def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='./posts'):
-    '''scraping posts from old.reddit.com subreddits'''
+def crawl_reddit(
+    first_post_number: int,
+    last_post_number: int,
+    dataset_root: str = os.path.join('.', 'posts'),
+    workers_count: int = 1,
+    is_root_logger_in_debug=False,
+    is_proc_loggers_in_debug=False,
+):
+    '''crawl old.reddit.com in concurrent manner'''
 
     if not os.path.exists(dataset_root):
         os.makedirs(dataset_root)
 
-    batch_count = 5000
-    logger = setup_logger(filename='crawler.log')
+    batch_size = 5000
+    logger = setup_logger(
+        filename='crawler.log',
+        level=logging.DEBUG if is_root_logger_in_debug else logging.INFO,
+    )
 
     reddit_first_post_ever = first_post_number
 
@@ -163,7 +177,7 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
     logger.info('%d posts already crawled', crawled_count)
 
     if last_crawled_id is None:
-        last_crawled_id = check_last_reddit_post_id(
+        last_crawled_id = specify_last_reddit_post_id(
             last_if_not_found=last_post_number
         )
         logger.info(
@@ -177,15 +191,17 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
         )
 
     if is_available(url='https://old.reddit.com'):
-        max_workers = min(8, (os.cpu_count() or 1))
-        with ProcessPoolExecutor(max_workers=max_workers) as pool:
+        with ProcessPoolExecutor(max_workers=workers_count) as pool:
             try:
                 args_generator = generate_process_args(
-                    batch_count=batch_count,
+                    batch_count=batch_size,
                     start=int(last_crawled_id, 36),
                     end=reddit_first_post_ever,
+                    is_logger_in_debug=is_proc_loggers_in_debug,
+                    dataset_root=dataset_root,
                 )
-                futures_buffer = [pool.submit(scrape_posts_batch, args)
+
+                futures_buffer = [pool.submit(crawl_posts_batch, args)
                                   for args in args_generator]
 
                 for future in as_completed(futures_buffer):
@@ -200,7 +216,3 @@ def scrape_reddit(first_post_number: int, last_post_number: int, dataset_root='.
                     os.kill(pid, signal.SIGKILL)
     else:
         logger.error('old.reddit is not available')
-
-
-if __name__ == '__main__':
-    scrape_reddit(first_post_number=295, last_post_number=1847556708)

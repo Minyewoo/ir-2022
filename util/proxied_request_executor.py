@@ -2,9 +2,8 @@
 
 import logging
 import random
-from time import sleep
 import requests
-from proxy_repository import ProxyRepository
+from util.proxy_repository import ProxyRepository
 
 
 class ProxiedRequestExecutor:
@@ -18,8 +17,6 @@ class ProxiedRequestExecutor:
         self,
         user_agent=dummy_user_agent,
         logger: logging.Logger = logging.getLogger(),
-        max_sleep_time=0.2,
-        min_sleep_time=0.0,
         retry_count=5
     ):
         self.headers = {'User-Agent': user_agent}
@@ -38,9 +35,6 @@ class ProxiedRequestExecutor:
                          len(self.available_proxies),
                          )
 
-        self.max_sleep_time = max_sleep_time
-        self.min_sleep_time = min_sleep_time
-
     def get(self, url: str,  params: dict = None):
         '''send proxied request ignoring exceptions'''
         try:
@@ -51,7 +45,6 @@ class ProxiedRequestExecutor:
     def unsafe_get(self, url: str,  params: dict = None):
         '''send proxied request'''
         for _ in range(self.retry_count):
-            sleep(random.uniform(self.min_sleep_time, self.max_sleep_time))
             index = random.randrange(0, len(self.available_proxies)-1)
             response = requests.get(
                 url=url,

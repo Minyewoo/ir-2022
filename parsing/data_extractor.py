@@ -4,21 +4,6 @@ import os
 import re
 import json
 from bs4 import BeautifulSoup
-from tqdm import tqdm
-
-
-def get_filenames(root_dir, batch_size=1000):
-    '''bruh'''
-    batch = []
-    for file in os.scandir(root_dir):
-        if file.name.endswith('.html'):
-            batch.append(os.path.join(root_dir, file.name))
-            if len(batch) == batch_size:
-                yield batch
-                batch = []
-
-    if len(batch) != 0:
-        yield batch
 
 
 def parse_post_title(markup: str):
@@ -125,7 +110,6 @@ def parse_awards(markup: str):
         award_name = ''
         if image_tag is not None:
             image_link = image_tag.get('src').split('/')[-1]
-            # print(award_name_pattern.findall(image_link)[0])
             groups = award_name_pattern.findall(image_link)[0]
             for group in groups:
                 if len(group) > 0:
@@ -150,9 +134,8 @@ def extract_post_data(post_path):
         }
 
 
-def extract_from_batch(posts_batch):
+def extract_from_batch(posts_batch, cleaned_posts_root=os.path.join('.', 'cleaned_posts')):
     '''extracts data from batch of posts'''
-    cleaned_posts_root = os.path.join('.', 'cleaned_posts')
     if not os.path.exists(cleaned_posts_root):
         os.makedirs(cleaned_posts_root)
 
@@ -169,15 +152,3 @@ def extract_from_batch(posts_batch):
         with open(save_path, 'w', encoding='UTF-8') as cleaned_post_file:
             json.dump(parsed_post, cleaned_post_file,
                       ensure_ascii=False, indent=4)
-
-
-if __name__ == '__main__':
-    posts_root = os.path.join('.', 'posts')
-    batch_size = 10
-    batches = get_filenames(posts_root, batch_size=batch_size)
-    file_count = len([name for name in os.listdir(posts_root)
-                      if os.path.isfile(os.path.join(posts_root, name))])
-    with tqdm(total=file_count) as bar:
-        for batch in batches:
-            extract_from_batch(batch)
-            bar.update(batch_size)
