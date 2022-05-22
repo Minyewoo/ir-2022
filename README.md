@@ -40,7 +40,7 @@ optional arguments:
 To parse crawled pages use `parse.py` script.
 By default, script searches for pages in `./posts`. If it's not there, please, specify right dir in `--input_path` param. 
 To start you can simply run `python3 parse.py` from project directory.
-For info about usage and additional parameters run `python3 crawl.py -h`. Here is the output of this command:
+For info about usage and additional parameters run `python3 parse.py -h`. Here is the output of this command:
 ```
 usage: parse.py [-h] [--input_path INPUT_PATH] [--save_path SAVE_PATH]
 
