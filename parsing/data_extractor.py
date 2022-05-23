@@ -24,41 +24,48 @@ def parse_post_title(markup: str):
 def parse_post_text(markup: str):
     '''parses and cleans up post content from html page'''
     soup = BeautifulSoup(markup, 'html.parser')
-    url_pattern = r'''\b(
-        (?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/?)
-        (?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\)){0,}
-        (?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s\!()\[\]{};:\'\"\.\,<>?«»“”‘’]){0,})'''
+
+    url_pattern = r'''((?:(?<=[^a-zA-Z0-9])''' \
+        r'''(?:(?:https?\:\/\/){0,1}(?:[a-zA-Z0-9\%]{1,}\:[a-zA-Z0-9\%]{1,}[@]){,1})'''\
+        r'''(?:(?:\w{1,}\.{1}){1,5}(?:(?:[a-zA-Z]){1,})|'''\
+        r'''(?:[a-zA-Z]{1,}\/[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\:[0-9]{1,4}){1})){1}'''\
+        r'''(?:(?:(?:\/{0,1}(?:[a-zA-Z0-9\-\_\=\-]){1,})*)(?:[?][a-zA-Z0-9\=\%\&\_\-]{1,}){0,1})'''\
+        r'''(?:\.(?:[a-zA-Z0-9]){0,}){0,1})'''
     post_text = ''
 
     post_tag = soup.select_one(
         '#siteTable .thing .entry .expando form .usertext-body .md')
     if post_tag is not None:
+        # removing <a> tags with link texts
+        link_tags = post_tag.find_all('a')
+        for link in link_tags:
+            link_text = link.get_text()
+            if re.search(url_pattern, link_text) is not None:
+                link.decompose()
+
+        # removing images
         img_tags = post_tag.find_all('img')
         for img in img_tags:
             img.decompose()
 
+        # removing tables
         table_tags = post_tag.find_all('table')
         for table in table_tags:
             table.decompose()
 
+        # removing code blocks
         code_tags = post_tag.find_all('code')
         for code in code_tags:
             code.decompose()
 
-        # removing <a> tags with links
-        link_tags = post_tag.find_all('a')
-        for link in link_tags:
-            link_text = link.get_text()
-            if re.match(url_pattern, link_text):
-                link.decompose()
-
         post_text = post_tag.get_text()
 
-        # revoving links in text
+        # revoving links in main content text
         post_text = re.sub(url_pattern, '', post_text)
 
+        post_text = re.sub(r'[\-]', ' ', post_text)
         post_text = re.sub(r'[^\w\s]', '', post_text)
-        post_text = re.sub(r'[\s]', ' ', post_text)
+        post_text = re.sub(r'[\s]+', ' ', post_text)
 
     return post_text.strip()
 
